@@ -19,6 +19,7 @@
       "expo-localization",
       "expo-secure-store",
       "expo-document-picker",
+      ["@maplibre/maplibre-react-native"],
       [
         "@rnmapbox/maps",
         {
