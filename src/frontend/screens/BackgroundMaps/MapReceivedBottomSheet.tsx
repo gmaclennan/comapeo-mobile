@@ -24,12 +24,9 @@ import {
 } from '../../lib/styles';
 import {
   useDeclineReceivedMapShare,
-  useDownloadReceivedMapShare,
-  useGetCustomMapInfo,
   useSingleReceivedMapShare,
 } from '@comapeo/core-react';
 import * as Sentry from '@sentry/react-native';
-import {toError} from '../../utils/errors';
 
 const m = defineMessages({
   sharingDevice: {
@@ -125,32 +122,10 @@ export function MapReceivedBottomSheet({
     currentLocation,
   ]);
 
-  const {data: customMapInfo, error: customMapError} = useGetCustomMapInfo();
   const {mutate: declineMapShare} = useDeclineReceivedMapShare();
-  const {mutate: downloadMapShare} = useDownloadReceivedMapShare();
 
   const handleAccept = () => {
-    if (!mapShare || mapShare.status === 'canceled') {
-      navigation.replace('MapShareCanceledBottomSheet');
-      return;
-    }
-    if (customMapInfo && !customMapError) {
-      navigation.replace('ReplaceBackgroundMap', {shareId});
-      return;
-    }
-    downloadMapShare(
-      {shareId},
-      {
-        onSuccess: () => {
-          navigation.replace('ReceivingBackgroundMap', {shareId});
-        },
-        onError: (err: unknown) => {
-          const error = toError(err, 'Failed to start map download');
-          Sentry.captureException(error);
-          navigation.replace('ErrorBottomSheet', {error});
-        },
-      },
-    );
+    navigation.replace('ReceiveMapFlow', {shareId});
   };
 
   const handleDecline = () => {

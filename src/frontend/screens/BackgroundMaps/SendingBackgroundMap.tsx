@@ -12,6 +12,7 @@ import {
 import SendingIcon from '../../images/SendingIcon.svg';
 import StackSvg from '../../images/Stack.svg';
 import SuccessIcon from '../../images/Success.svg';
+import ErrorIcon from '../../images/Error.svg';
 import {usePreventAndroidBackButton} from '../../hooks/usePreventAndroidBackButton';
 import {HeaderText} from '../../sharedComponents/Text/HeaderText';
 import {BodyText} from '../../sharedComponents/Text/BodyText';
@@ -19,7 +20,6 @@ import {type NativeRootNavigationProps} from '../../sharedTypes/navigation';
 import {TextButton} from '../../sharedComponents/TextButton';
 import {SecondaryButton} from '../../sharedComponents/Buttons';
 import {IconTitleDescription} from '../../sharedComponents/IconTitleDescription';
-import {toError} from '../../utils/errors';
 import {SendingMapProgressBar} from './SendingMapProgressBar';
 import {
   VERY_LIGHT_GREY,
@@ -67,6 +67,22 @@ const m = defineMessages({
     id: 'screens.Settings.MapManagement.SendingBackgroundMap.done',
     defaultMessage: 'Done',
   },
+  sharingCanceled: {
+    id: 'screens.Settings.MapManagement.SendingBackgroundMap.sharingCanceled',
+    defaultMessage: 'Sharing Canceled',
+  },
+  canceledMessage: {
+    id: 'screens.Settings.MapManagement.SendingBackgroundMap.canceledMessage',
+    defaultMessage: 'Collaborator canceled sharing before completing.',
+  },
+  somethingWrong: {
+    id: 'screens.Settings.MapManagement.SendingBackgroundMap.somethingWrong',
+    defaultMessage: 'Something Went Wrong',
+  },
+  goBack: {
+    id: 'screens.Settings.MapManagement.SendingBackgroundMap.goBack',
+    defaultMessage: 'Go Back',
+  },
 });
 
 export function SendingBackgroundMap({
@@ -95,25 +111,10 @@ export function SendingBackgroundMap({
           navigation.goBack();
         },
         onError: (err: Error) => {
-          const errString = String(err);
-
-          if (errString.includes('409')) {
-            navigation.replace('MapShareCanceledBottomSheet');
-            return;
-          }
-
-          if (
-            errString.includes('Invalid status transition') &&
-            (errString.includes('canceled') ||
-              errString.includes('aborted') ||
-              errString.includes('declined'))
-          ) {
-            navigation.replace('MapShareCanceledBottomSheet');
-            return;
-          }
-
           Sentry.captureException(err);
-          navigation.replace('ErrorBottomSheet', {error: err});
+          // If cancel fails, just go back — the share status will reflect
+          // the actual state regardless.
+          navigation.popTo('BackgroundMaps');
         },
       },
     );
@@ -129,23 +130,6 @@ export function SendingBackgroundMap({
     return () => subscription.remove();
   }, [cancelShare]);
 
-  React.useEffect(() => {
-    if (!mapShare) {
-      navigation.popTo('BackgroundMaps');
-      return;
-    }
-    if (mapShare.status === 'aborted') {
-      navigation.replace('MapShareCanceledBottomSheet');
-      return;
-    }
-    if (mapShare.status === 'error') {
-      Sentry.captureException(mapShare.error);
-      navigation.replace('ErrorBottomSheet', {
-        error: toError(mapShare.error, 'Map share failed'),
-      });
-    }
-  }, [mapShare, navigation]);
-
   const handleClose = () => {
     navigation.popTo('BackgroundMaps');
   };
@@ -159,17 +143,31 @@ export function SendingBackgroundMap({
       .padStart(2, '0')}`;
   }
 
-  if (mapShare?.status === 'declined') {
+  if (!mapShare) {
+    navigation.popTo('BackgroundMaps');
+    return null;
+  }
+
+  // Terminal states
+  if (mapShare.status === 'aborted') {
+    return <ShareCanceled onClose={handleClose} />;
+  }
+
+  if (mapShare.status === 'error') {
+    return <ShareError onClose={handleClose} />;
+  }
+
+  if (mapShare.status === 'declined') {
     const reason = (mapShare as {reason?: string}).reason;
     return <MapDeclined reason={reason} onClose={handleClose} />;
   }
 
-  if (mapShare?.status === 'downloading') {
-    return <SendingMap shareId={shareId} onCancel={cancelShare} />;
+  if (mapShare.status === 'completed') {
+    return <MapSent onDone={handleClose} />;
   }
 
-  if (mapShare?.status === 'completed') {
-    return <MapSent onDone={handleClose} />;
+  if (mapShare.status === 'downloading') {
+    return <SendingMap shareId={shareId} onCancel={cancelShare} />;
   }
 
   return (
@@ -271,6 +269,43 @@ function MapSent({onDone}: {onDone: () => void}) {
       />
       <View style={styles.buttonContainer}>
         <SecondaryButton fullSize text={t(m.done)} onPress={onDone} />
+      </View>
+    </View>
+  );
+}
+
+function ShareCanceled({onClose}: {onClose: () => void}) {
+  const {formatMessage: t} = useIntl();
+
+  return (
+    <View style={styles.baseContainer}>
+      <View style={styles.centeredContent}>
+        <IconTitleDescription
+          icon={<ErrorIcon width={100} height={100} />}
+          title={t(m.sharingCanceled)}
+          description={t(m.canceledMessage)}
+        />
+      </View>
+      <View style={styles.buttonContainer}>
+        <SecondaryButton fullSize text={t(m.close)} onPress={onClose} />
+      </View>
+    </View>
+  );
+}
+
+function ShareError({onClose}: {onClose: () => void}) {
+  const {formatMessage: t} = useIntl();
+
+  return (
+    <View style={styles.baseContainer}>
+      <View style={styles.centeredContent}>
+        <IconTitleDescription
+          icon={<ErrorIcon width={100} height={100} />}
+          title={t(m.somethingWrong)}
+        />
+      </View>
+      <View style={styles.buttonContainer}>
+        <SecondaryButton fullSize text={t(m.goBack)} onPress={onClose} />
       </View>
     </View>
   );
