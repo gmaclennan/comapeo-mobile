@@ -1,5 +1,5 @@
 import {useManyInvites} from '@comapeo/core-react';
-import {useEffect} from 'react';
+import {useEffect, useRef} from 'react';
 import {isEditingScreen, isInviteScreen} from '../lib/screenNameChecks';
 
 export const PendingInvitesListener = ({
@@ -10,6 +10,8 @@ export const PendingInvitesListener = ({
   navigateToInviteScreen: (inviteId: string) => void;
 }) => {
   const {data: invites} = useManyInvites();
+  const navigateRef = useRef(navigateToInviteScreen);
+  navigateRef.current = navigateToInviteScreen;
 
   useEffect(() => {
     const invite = invites.find(i => i.state === 'pending');
@@ -20,7 +22,7 @@ export const PendingInvitesListener = ({
 
     if (isEditingScreen(currentRouteName)) return;
 
-    navigateToInviteScreen(invite.inviteId);
-  }, [invites, currentRouteName, navigateToInviteScreen]);
+    navigateRef.current(invite.inviteId);
+  }, [invites, currentRouteName]);
   return null;
 };

@@ -1,5 +1,5 @@
 import {useManyReceivedMapShares} from '@comapeo/core-react';
-import {useEffect} from 'react';
+import {useEffect, useRef} from 'react';
 import {isEditingScreen, isMapShareScreen} from '../lib/screenNameChecks';
 
 export const PendingMapSharesListener = ({
@@ -10,6 +10,8 @@ export const PendingMapSharesListener = ({
   navigateToMapShareScreen: (shareId: string) => void;
 }) => {
   const mapShares = useManyReceivedMapShares();
+  const navigateRef = useRef(navigateToMapShareScreen);
+  navigateRef.current = navigateToMapShareScreen;
 
   useEffect(() => {
     const pendingShare = mapShares.find(share => share.status === 'pending');
@@ -19,8 +21,8 @@ export const PendingMapSharesListener = ({
 
     if (isEditingScreen(currentRouteName)) return;
 
-    navigateToMapShareScreen(pendingShare.shareId);
-  }, [mapShares, currentRouteName, navigateToMapShareScreen]);
+    navigateRef.current(pendingShare.shareId);
+  }, [mapShares, currentRouteName]);
 
   return null;
 };
