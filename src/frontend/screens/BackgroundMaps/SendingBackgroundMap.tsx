@@ -123,18 +123,19 @@ export function SendingBackgroundMap({
     return () => subscription.remove();
   }, [cancelShare]);
 
-  React.useEffect(() => {
-    if (!mapShare) {
-      navigation.popTo('BackgroundMaps');
-    }
-  }, [mapShare, navigation]);
-
   const handleClose = () => {
     navigation.popTo('BackgroundMaps');
   };
 
   if (!mapShare) {
-    return null;
+    return (
+      <TerminalState
+        icon={<ErrorIcon width={100} height={100} />}
+        title={t(m.somethingWrong)}
+        buttonText={t(m.goBack)}
+        onPress={handleClose}
+      />
+    );
   }
 
   // Terminal states
