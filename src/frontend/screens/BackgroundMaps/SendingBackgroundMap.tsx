@@ -19,7 +19,7 @@ import {BodyText} from '../../sharedComponents/Text/BodyText';
 import {type NativeRootNavigationProps} from '../../sharedTypes/navigation';
 import {TextButton} from '../../sharedComponents/TextButton';
 import {SecondaryButton} from '../../sharedComponents/Buttons';
-import {IconTitleDescription} from '../../sharedComponents/IconTitleDescription';
+import {TerminalState} from './TerminalState';
 import {SendingMapProgressBar} from './SendingMapProgressBar';
 import {
   VERY_LIGHT_GREY,
@@ -94,14 +94,9 @@ export function SendingBackgroundMap({
 
   const mapShare = useSingleSentMapShare({shareId});
   const {mutate: cancelMapShare} = useCancelSentMapShare();
-  const currentTime = useCurrentTime(1000);
 
   usePreventAndroidBackButton();
   useKeepAwake();
-
-  const elapsedSeconds = mapShare
-    ? Math.floor((currentTime.getTime() - mapShare.mapShareCreatedAt) / 1000)
-    : 0;
 
   const cancelShare = React.useCallback(() => {
     cancelMapShare(
@@ -112,8 +107,6 @@ export function SendingBackgroundMap({
         },
         onError: (err: Error) => {
           Sentry.captureException(err);
-          // If cancel fails, just go back — the share status will reflect
-          // the actual state regardless.
           navigation.popTo('BackgroundMaps');
         },
       },
@@ -130,31 +123,42 @@ export function SendingBackgroundMap({
     return () => subscription.remove();
   }, [cancelShare]);
 
+  React.useEffect(() => {
+    if (!mapShare) {
+      navigation.popTo('BackgroundMaps');
+    }
+  }, [mapShare, navigation]);
+
   const handleClose = () => {
     navigation.popTo('BackgroundMaps');
   };
 
-  function formatElapsed(totalSeconds: number) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes.toString().padStart(2, '0')}:${seconds
-      .toString()
-      .padStart(2, '0')}`;
-  }
-
   if (!mapShare) {
-    navigation.popTo('BackgroundMaps');
     return null;
   }
 
   // Terminal states
   if (mapShare.status === 'aborted') {
-    return <ShareCanceled onClose={handleClose} />;
+    return (
+      <TerminalState
+        icon={<ErrorIcon width={100} height={100} />}
+        title={t(m.sharingCanceled)}
+        description={t(m.canceledMessage)}
+        buttonText={t(m.close)}
+        onPress={handleClose}
+      />
+    );
   }
 
   if (mapShare.status === 'error') {
-    return <ShareError onClose={handleClose} />;
+    return (
+      <TerminalState
+        icon={<ErrorIcon width={100} height={100} />}
+        title={t(m.somethingWrong)}
+        buttonText={t(m.goBack)}
+        onPress={handleClose}
+      />
+    );
   }
 
   if (mapShare.status === 'declined') {
@@ -163,12 +167,47 @@ export function SendingBackgroundMap({
   }
 
   if (mapShare.status === 'completed') {
-    return <MapSent onDone={handleClose} />;
+    return (
+      <TerminalState
+        icon={<SuccessIcon />}
+        title={t(m.mapSent)}
+        buttonText={t(m.done)}
+        onPress={handleClose}
+      />
+    );
   }
 
   if (mapShare.status === 'downloading') {
     return <SendingMap shareId={shareId} onCancel={cancelShare} />;
   }
+
+  return (
+    <WaitingForAccept
+      createdAt={mapShare.mapShareCreatedAt}
+      onCancel={cancelShare}
+    />
+  );
+}
+
+function WaitingForAccept({
+  createdAt,
+  onCancel,
+}: {
+  createdAt: number;
+  onCancel: () => void;
+}) {
+  const {formatMessage: t} = useIntl();
+  const currentTime = useCurrentTime(1000);
+
+  const elapsedSeconds = Math.floor(
+    (currentTime.getTime() - createdAt) / 1000,
+  );
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  const formatted = `${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
 
   return (
     <View style={styles.container}>
@@ -177,9 +216,9 @@ export function SendingBackgroundMap({
         {t(m.waitingMessage)}
       </HeaderText>
       <BodyText style={{marginTop: 20}}>
-        {t(m.timerMessage, {time: formatElapsed(elapsedSeconds)})}
+        {t(m.timerMessage, {time: formatted})}
       </BodyText>
-      <TextButton title={t(m.cancel)} onPress={cancelShare} />
+      <TextButton title={t(m.cancel)} onPress={onCancel} />
     </View>
   );
 }
@@ -248,65 +287,11 @@ function SendingMap({
         </View>
       </View>
 
-      <Pressable onPress={onCancel} style={styles.cancelButton}>
+      <Pressable hitSlop={20} onPress={onCancel} style={styles.cancelButton}>
         <HeaderText variant="header4" style={styles.cancelText}>
           {t(m.cancel)}
         </HeaderText>
       </Pressable>
-    </View>
-  );
-}
-
-function MapSent({onDone}: {onDone: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={[styles.baseContainer, {justifyContent: 'space-between'}]}>
-      <IconTitleDescription
-        style={styles.sentContent}
-        icon={<SuccessIcon />}
-        title={t(m.mapSent)}
-      />
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.done)} onPress={onDone} />
-      </View>
-    </View>
-  );
-}
-
-function ShareCanceled({onClose}: {onClose: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={styles.baseContainer}>
-      <View style={styles.centeredContent}>
-        <IconTitleDescription
-          icon={<ErrorIcon width={100} height={100} />}
-          title={t(m.sharingCanceled)}
-          description={t(m.canceledMessage)}
-        />
-      </View>
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.close)} onPress={onClose} />
-      </View>
-    </View>
-  );
-}
-
-function ShareError({onClose}: {onClose: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={styles.baseContainer}>
-      <View style={styles.centeredContent}>
-        <IconTitleDescription
-          icon={<ErrorIcon width={100} height={100} />}
-          title={t(m.somethingWrong)}
-        />
-      </View>
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.goBack)} onPress={onClose} />
-      </View>
     </View>
   );
 }
@@ -364,8 +349,5 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: COMAPEO_BLUE,
-  },
-  sentContent: {
-    paddingTop: 180,
   },
 });

@@ -16,15 +16,14 @@ import StackSvg from '../../images/Stack.svg';
 import SuccessIcon from '../../images/Success.svg';
 import ErrorIcon from '../../images/Error.svg';
 import {HeaderText} from '../../sharedComponents/Text/HeaderText';
-import {BodyText} from '../../sharedComponents/Text/BodyText';
 import {type NativeRootNavigationProps} from '../../sharedTypes/navigation';
-import {toError} from '../../utils/errors';
 import {usePreventAndroidBackButton} from '../../hooks/usePreventAndroidBackButton';
 import {
   SecondaryButton,
   DestructiveButton,
 } from '../../sharedComponents/Buttons';
 import {IconTitleDescription} from '../../sharedComponents/IconTitleDescription';
+import {TerminalState} from './TerminalState';
 import {ReceivingMapProgressBar} from './ReceivingMapProgressBar';
 import {
   VERY_LIGHT_GREY,
@@ -85,12 +84,11 @@ const m = defineMessages({
   },
 });
 
-type FlowState = 'confirmReplace' | 'downloading' | 'idle';
-
 export function ReceiveMapFlow({
   route,
   navigation,
 }: NativeRootNavigationProps<'ReceiveMapFlow'>) {
+  const {formatMessage: t} = useIntl();
   const {shareId} = route.params;
   const mapShare = useSingleReceivedMapShare({shareId});
   const {data: customMapInfo, error: customMapError} = useGetCustomMapInfo();
@@ -99,43 +97,37 @@ export function ReceiveMapFlow({
   const {mutate: abortDownload} = useAbortReceivedMapShareDownload();
 
   const hasExistingMap = !!customMapInfo && !customMapError;
-  const [flowState, setFlowState] = React.useState<FlowState>(
-    hasExistingMap ? 'confirmReplace' : 'idle',
-  );
+  const [needsReplaceConfirmation, setNeedsReplaceConfirmation] =
+    React.useState(hasExistingMap);
 
   usePreventAndroidBackButton();
   useKeepAwake();
 
-  // Start download automatically when there's no existing map to replace
-  React.useEffect(() => {
-    if (flowState !== 'idle') return;
-    if (mapShare.status !== 'pending') return;
-
+  const startDownload = () => {
     downloadMapShare(
       {shareId},
       {
-        onSuccess: () => setFlowState('downloading'),
         onError: (err: unknown) => {
           Sentry.captureException(err);
         },
       },
     );
-  }, [flowState, mapShare.status, shareId, downloadMapShare]);
+  };
+
+  // Start download automatically when there's no existing map to replace
+  React.useEffect(() => {
+    if (needsReplaceConfirmation) return;
+    if (mapShare.status !== 'pending') return;
+    startDownload();
+  }, [needsReplaceConfirmation, mapShare.status]);
 
   const handleDone = () => {
     navigation.popTo('BackgroundMaps');
   };
 
   const handleReplace = () => {
-    downloadMapShare(
-      {shareId},
-      {
-        onSuccess: () => setFlowState('downloading'),
-        onError: (err: unknown) => {
-          Sentry.captureException(err);
-        },
-      },
-    );
+    setNeedsReplaceConfirmation(false);
+    startDownload();
   };
 
   const handleDeclineReplace = () => {
@@ -151,7 +143,7 @@ export function ReceiveMapFlow({
     );
   };
 
-  const handleCancelDownload = React.useCallback(() => {
+  const handleCancelDownload = () => {
     abortDownload(
       {shareId},
       {
@@ -162,23 +154,44 @@ export function ReceiveMapFlow({
         },
       },
     );
-  }, [abortDownload, shareId, navigation]);
+  };
 
-  // Terminal states — render these regardless of flowState
+  // Terminal states
   if (mapShare.status === 'canceled' || mapShare.status === 'aborted') {
-    return <ShareCanceled onClose={handleDone} />;
+    return (
+      <TerminalState
+        icon={<ErrorIcon width={100} height={100} />}
+        title={t(m.sharingCanceled)}
+        description={t(m.canceledMessage)}
+        buttonText={t(m.close)}
+        onPress={handleDone}
+      />
+    );
   }
 
   if (mapShare.status === 'error') {
-    return <ShareError onClose={handleDone} />;
+    return (
+      <TerminalState
+        icon={<ErrorIcon width={100} height={100} />}
+        title={t(m.somethingWrong)}
+        buttonText={t(m.goBack)}
+        onPress={handleDone}
+      />
+    );
   }
 
   if (mapShare.status === 'completed') {
-    return <MapUpdated onDone={handleDone} />;
+    return (
+      <TerminalState
+        icon={<SuccessIcon />}
+        title={t(m.mapUpdated)}
+        buttonText={t(m.done)}
+        onPress={handleDone}
+      />
+    );
   }
 
-  // Flow states
-  if (flowState === 'confirmReplace') {
+  if (needsReplaceConfirmation) {
     return (
       <ReplaceConfirmation
         onReplace={handleReplace}
@@ -260,63 +273,11 @@ function Downloading({
           <ReceivingMapProgressBar shareId={shareId} />
         </View>
       </View>
-      <Pressable onPress={onCancel} style={styles.cancelButton}>
+      <Pressable hitSlop={20} onPress={onCancel} style={styles.cancelButton}>
         <HeaderText variant="header4" style={styles.cancelText}>
           {t(m.cancel)}
         </HeaderText>
       </Pressable>
-    </View>
-  );
-}
-
-function MapUpdated({onDone}: {onDone: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={styles.terminalContainer}>
-      <View style={styles.terminalContent}>
-        <IconTitleDescription icon={<SuccessIcon />} title={t(m.mapUpdated)} />
-      </View>
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.done)} onPress={onDone} />
-      </View>
-    </View>
-  );
-}
-
-function ShareCanceled({onClose}: {onClose: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={styles.terminalContainer}>
-      <View style={styles.terminalContent}>
-        <IconTitleDescription
-          icon={<ErrorIcon width={100} height={100} />}
-          title={t(m.sharingCanceled)}
-          description={t(m.canceledMessage)}
-        />
-      </View>
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.close)} onPress={onClose} />
-      </View>
-    </View>
-  );
-}
-
-function ShareError({onClose}: {onClose: () => void}) {
-  const {formatMessage: t} = useIntl();
-
-  return (
-    <View style={styles.terminalContainer}>
-      <View style={styles.terminalContent}>
-        <IconTitleDescription
-          icon={<ErrorIcon width={100} height={100} />}
-          title={t(m.somethingWrong)}
-        />
-      </View>
-      <View style={styles.buttonContainer}>
-        <SecondaryButton fullSize text={t(m.goBack)} onPress={onClose} />
-      </View>
     </View>
   );
 }
@@ -365,16 +326,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: COMAPEO_BLUE,
-  },
-  terminalContainer: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
-  },
-  terminalContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   buttonContainer: {
     gap: 12,
