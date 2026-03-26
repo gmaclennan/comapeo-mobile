@@ -64,15 +64,11 @@ export const RootStackNavigator = () => {
       <React.Suspense fallback={<Loading />}>
         <PendingInvitesListener
           currentRouteName={state.routes[state.index]?.name}
-          navigateToInviteScreen={inviteId =>
-            navigation.navigate('InviteReceived', {inviteId})
-          }
+          navigation={navigation}
         />
         <PendingMapSharesListener
           currentRouteName={state.routes[state.index]?.name}
-          navigateToMapShareScreen={shareId =>
-            navigation.navigate('MapReceivedBottomSheet', {shareId})
-          }
+          navigation={navigation}
         />
         {children}
       </React.Suspense>

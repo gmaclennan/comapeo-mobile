@@ -1,17 +1,17 @@
 import {useManyInvites} from '@comapeo/core-react';
-import {useEffect, useRef} from 'react';
+import {useEffect} from 'react';
 import {isEditingScreen, isInviteScreen} from '../lib/screenNameChecks';
+import type {NavigationProp} from '@react-navigation/native';
+import type {AppStackParamsList} from '../sharedTypes/navigation';
 
 export const PendingInvitesListener = ({
   currentRouteName,
-  navigateToInviteScreen,
+  navigation,
 }: {
   currentRouteName: string | undefined;
-  navigateToInviteScreen: (inviteId: string) => void;
+  navigation: NavigationProp<AppStackParamsList>;
 }) => {
   const {data: invites} = useManyInvites();
-  const navigateRef = useRef(navigateToInviteScreen);
-  navigateRef.current = navigateToInviteScreen;
 
   useEffect(() => {
     const invite = invites.find(i => i.state === 'pending');
@@ -22,7 +22,7 @@ export const PendingInvitesListener = ({
 
     if (isEditingScreen(currentRouteName)) return;
 
-    navigateRef.current(invite.inviteId);
-  }, [invites, currentRouteName]);
+    navigation.navigate('InviteReceived', {inviteId: invite.inviteId});
+  }, [invites, currentRouteName, navigation]);
   return null;
 };

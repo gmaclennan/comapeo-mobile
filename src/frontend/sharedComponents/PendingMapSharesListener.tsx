@@ -1,17 +1,17 @@
 import {useManyReceivedMapShares} from '@comapeo/core-react';
-import {useEffect, useRef} from 'react';
+import {useEffect} from 'react';
 import {isEditingScreen, isMapShareScreen} from '../lib/screenNameChecks';
+import type {NavigationProp} from '@react-navigation/native';
+import type {AppStackParamsList} from '../sharedTypes/navigation';
 
 export const PendingMapSharesListener = ({
   currentRouteName,
-  navigateToMapShareScreen,
+  navigation,
 }: {
   currentRouteName: string | undefined;
-  navigateToMapShareScreen: (shareId: string) => void;
+  navigation: NavigationProp<AppStackParamsList>;
 }) => {
   const mapShares = useManyReceivedMapShares();
-  const navigateRef = useRef(navigateToMapShareScreen);
-  navigateRef.current = navigateToMapShareScreen;
 
   useEffect(() => {
     const pendingShare = mapShares.find(share => share.status === 'pending');
@@ -21,8 +21,10 @@ export const PendingMapSharesListener = ({
 
     if (isEditingScreen(currentRouteName)) return;
 
-    navigateRef.current(pendingShare.shareId);
-  }, [mapShares, currentRouteName]);
+    navigation.navigate('MapReceivedBottomSheet', {
+      shareId: pendingShare.shareId,
+    });
+  }, [mapShares, currentRouteName, navigation]);
 
   return null;
 };
